@@ -1,0 +1,235 @@
+<html>
+<head>
+    <title>A Map Leads to the Best Spots of Sunset</title>
+    <script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src="Neighborhood Tabulation Areas.geojson.json"></script>
+    <script src="Sunset.js"></script>
+    <script src="https://d3js.org/d3.v4.js"></script>
+</head>
+<body>
+    
+    <div id="map"></div>
+    <div id="dataviz_basicZoom"></div>
+    <div id="button">
+        <form>
+                    <input id='rb1' type='radio' name="radio button" value="Location" checked='checked'><label>Location</label>
+                    <input id='rb2' type='radio' name="radio button" value="Most Viewed" name="mode"><label>Most Viewed</label>
+                    <input id='rb3' type='radio' name="radio button" value="Most Faved" name="mode">Most Faved</input>
+                </form>
+    </div>
+
+
+<style>
+#button {
+        font: 14px "Montserrat", sans-serif;
+        text-align: center;
+        color: darkgray;
+        position: relative;
+        top: 20px;
+        left: 60px;
+    }
+div.tooltip {
+        color: darkgray; 
+        background: #fff; 
+        border-radius: 3px; 
+        box-shadow: 0px 0px 2px 0px #a6a6a6; 
+        height: 65px;
+        padding: 7px;
+        font: 12px "Montserrat", sans-serif;
+        text-shadow: #f5f5f5 0 1px 0;
+        opacity: 0.9; 
+        position: absolute;
+        text-align: center;
+    }
+body{margin:0;padding:0}
+body{width:1000px; margin:auto}
+    </style>
+
+<script>
+    var offsetL = document.getElementById('map').offsetLeft+10;
+    var offsetT = document.getElementById('map').offsetTop+10;
+
+    var tooltip = d3.select("#map")
+         .append("div")
+         .attr("class", "tooltip hidden");
+
+        var InputValue = null;
+        var ViewBy = ["Location","Most Viewed","Most Faved"];
+        
+        // setting up svg
+        var width = 1000;
+        var height = 800;
+
+        var svg = d3.select( "body" )
+            .append( "svg" )
+            .attr( "width", width )
+            .attr( "height", height )
+            .call(d3.zoom()
+            .extent([[0, 0], [width, height]])
+            .scaleExtent([1, 10])
+            .on("zoom", function () {
+                svg.attr("transform", d3.event.transform)}))
+            .append("g");
+
+        // svg.append("rect")
+            //.attr("width", "100%")
+            //.attr("height", "100%")
+            //.attr("fill", "#F2F0F0");
+
+        var g = svg.append( "g" );
+
+        var albersProjection = d3.geo.albers()
+            .scale( 100000 )
+            .rotate( [71.057,0] )
+            .center( [-2.92, 40.71] )
+            .translate( [width/2,height/2] );
+
+        var geoPath = d3.geo.path()
+            .projection( albersProjection );
+
+        g.selectAll( "path" )
+            .data(neighborhoods_json.features )
+            .enter()
+            .append( "path" )
+            .attr( "fill", "#F2F2F2" )
+            .attr( "stroke", "#8D9190")
+            .attr( "stroke-width", .5)
+            .attr( "d", geoPath );
+
+        var Sunset_December = svg.append( "g" );
+
+        ViewScale = d3.scale.linear()
+            .domain([2399,50612])
+            .range([3,20])
+        
+        FavScale = d3.scale.linear()
+            .domain([73,592])  
+            .range([3,20])
+        
+        //var ViewColor = d3.scaleThreshold()
+            //.domain([30,21523])
+            //.range(["#f2f0f7","#54278f"]);
+
+        //var FavColor = d3.scaleThreshold()
+            //.domain([0,286])
+            //.range(["#f2f0f7","#54278f"]);
+        
+
+        Sunset_December.selectAll( "circle" )
+            .data(dataset.features)
+            .enter()
+            .append( "circle" )
+            .attr("cx", function (d) {
+                // console.log(d.geometry.coordinates); 
+                coords = albersProjection(d.geometry.coordinates) 
+                // console.log(coords);
+                return coords[0];})
+            .attr("cy", function (d) {
+                coords = albersProjection(d.geometry.coordinates)
+                return coords[1];})
+            .on("mousemove", function showTooltip(d) {               
+                var mouse = d3.mouse(svg.node())
+            .map( function(d) { return parseInt(d); } );
+                tooltip.classed("hidden", false)
+            .attr("style", "left:"+(mouse[0]+offsetL)+"px;top:"+(mouse[1]+offsetT)+"px")
+            .html('<a href= "'+d.properties.url+'" target="_blank">'+d.properties.title +"</a>"
+            +"<br/>"+'<a href= "https://www.google.com/maps" target="_blank">'+"Location:["+d.geometry.coordinates+"]"+"</a>"
+            +"<br/>"+"Date:"+d.properties.datetaken
+            +"<br/>"+"Number of Views:"+d.properties.views
+            +"<br/>"+"Number of Favorites:"+d.properties.favorites);
+            })
+            .on("mouseout",  function(d,i) {
+                tooltip.classed("hidden", true);
+            })
+            .attr( "fill", "#010440" )
+            .attr("fill-opacity", .4)
+            .attr( "d", geoPath )
+            .attr('r',1);
+
+        // when the input range changes update the value 
+        // d3.select("#timeslide").on("input", function() {update(+this.value);});
+
+        d3.selectAll('input[name="radio button"]').on("change",function(){
+            update(this.value);
+        });
+
+        // update the fill and radius of each SVG of class "incident" with value
+        function update(value) {
+        InputValue=value;
+        Sunset_December.selectAll( "circle" )
+            .transition()
+            .duration(2000)
+            .attr('r', function (d){
+                return rMatch(d);
+            })
+            .attr('fill', fillMatch)
+        };
+
+        // update radius function
+        // was .attr('r',function View(d){return ViewScale(d.properties.views)}), r is controlled by 'views' in Sunset December.js file
+
+        function View(d){return ViewScale(d.properties.views)}
+        function Fave(d){return FavScale(d.properties.favorites)}
+        
+        // update radius
+        function rMatch(data) {
+        if (InputValue == "Most Faved") {
+            return Fave(data)
+            ;};
+        if (InputValue == "Most Viewed") {
+            return View(data)
+            ;};
+        if (InputValue == "Location") {
+            return 1
+            ;};
+        };
+
+        // update fill
+        function fillMatch(data, value) {
+        if (InputValue == "Most Faved") {
+            return "#D99B29";};
+        if (InputValue == "Most Viewed") {
+            return "#BF3030";};
+        if (InputValue == "Location") {
+            return "#010440";};
+        };
+
+        function initialDate(d,i){
+        if (InputValue == "Location") {
+            this.parentElement.appendChild(this);
+            return 1;};};
+
+        Sunset_December.selectAll( "circle" )
+            .data(dataset.features)
+            .enter()
+            .append( "circle" )
+            .attr("cx", function (d) {
+                // console.log(d.geometry.coordinates); 
+                coords = albersProjection(d.geometry.coordinates) 
+                // console.log(coords); 
+                return coords[0];})
+            .attr("cy", function (d) {
+                coords = albersProjection(d.geometry.coordinates)
+                return coords[1];})
+            .on("mousemove", function showTooltip(d) {               
+                var mouse = d3.mouse(svg.node())
+            .map( function(d) { return parseInt(d); } );
+                tooltip
+                    .classed("hidden", false)
+                    .attr("style", "left:"+(mouse[0])+"px;top:"+(mouse[1])+"px")
+                    .html('<a href= "'+d.properties.url+'" target="_blank">'+d.properties.title +"</a>"
+                        +"<br/>"+"Location:["+d.geometry.coordinates+"]"
+                        +"<br/>"+"Date:"+d.properties.datetaken
+                        +"<br/>"+"Number of Views:"+d.properties.views
+                        +"<br/>"+"Number of Favorites:"+d.properties.favorites);
+            })
+            .on("mouseout",  function(d,i) {
+                tooltip.classed("hidden", true);
+            })
+            .attr( "fill", "#010440" )
+            .attr("fill-opacity", .4)
+            .attr('d', geoPath )
+            .attr('r',initialDate);
+    </script>
+</body>
+</html>
